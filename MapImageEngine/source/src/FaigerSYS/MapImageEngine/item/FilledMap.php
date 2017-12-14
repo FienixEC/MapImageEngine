@@ -10,22 +10,22 @@ use FaigerSYS\MapImageEngine\MapImageEngine;
 
 class FilledMap extends Item {
 	
-	const CURRENT_MAP_API = 3;
-	const SUPPORTED_MAP_API = [3];
+	const CURRENT_MAP_API = 2;
+	const SUPPORTED_MAP_API = [1, 2];
 	
 	public function __construct() {
 		parent::__construct(self::FILLED_MAP ?? 358, 0, 1, 'Map');
 	}
 	
-	public function setCompoundTag($tag) {
-		parent::setCompoundTag($tag);
+	public function setCompoundTag($tags): Item {
+		parent::setCompoundTag($tags);
 		$this->updateMapData();
 		
 		return $this;
 	}
 	
-	public function setNamedTag(CompoundTag $tag) {
-		parent::setNamedTag($tag);
+	public function setNamedTag(CompoundTag $tags): Item {
+		parent::setNamedTag($tags);
 		$this->updateMapData();
 		
 		return $this;
@@ -37,58 +37,53 @@ class FilledMap extends Item {
 			return;
 		}
 		
-		$tag = $this->getNamedTag();
-		if (!isset($tag->mie_data)) {
+		$tags = $this->getNamedTag();
+		if (!isset($tags->mie_data)) {
 			return;
 		}
 		
-		$mie_data = json_decode((string) $tag->mie_data, true);
-		
-		$map_id = 0;
+		$mie_data = json_decode((string) $tags->mie_data, true);
 		
 		$api = $mie_data['api'] ?? -1;;
-		if (in_array($api, self::SUPPORTED_MAP_API)) {
-			$image = $plugin->getImageStorage()->getImage($mie_data['image_hash']);
-			if ($image) {
-				$chunk = $image->getChunk($mie_data['x_block'], $mie_data['y_block']);
-				if ($chunk) {
-					$map_id = $chunk->getMapId();
+		if (!in_array($api, self::SUPPORTED_MAP_API)) {
+			$map_id = 0;
+		} else {
+			if ($api !== self::CURRENT_MAP_API) {
+				if ($api === 1) {
+					$mie_data['image_hash'] = $plugin->getImageStorage()->getNewHash($mie_data['image_hash']);
+					if ($mie_data['image_hash'] === null) {
+						return;
+					}
 				}
+				
+				$mie_data['api'] = self::CURRENT_MAP_API;
+				$tags->mie_data = new StringTag('mie_data', json_encode($mie_data));
 			}
+			
+			$map_id = $plugin->getImageStorage()->getMapId($mie_data['image_hash'], $mie_data['x_block'], $mie_data['y_block']) ?: 0;
 		}
 		
-		$tag->map_uuid = new StringTag('map_uuid', (string) $map_id);
+		$tags->map_uuid = new StringTag('map_uuid', (string) $map_id);
 		
-		parent::setNamedTag($tag);
+		parent::setNamedTag($tags);
 	}
 	
-	public function setImageData(string $image_hash, int $block_x, int $block_y) {
-		$tag = $this->getNamedTag() ?? new CompoundTag('', []);
-		$tag->mie_data = new StringTag('mie_data', json_encode([
+	public function setImageData(string $image_hash, int $x, int $y) {
+		$tags = $this->getNamedTag() ?? new CompoundTag('', []);
+		$tags->mie_data = new StringTag('mie_data', json_encode([
 			'api'        => self::CURRENT_MAP_API,
 			'image_hash' => $image_hash,
-			'x_block'    => $block_x,
-			'y_block'    => $block_y
+			'x_block'    => $x,
+			'y_block'    => $y
 		]));
-		parent::setNamedTag($tag);
+		parent::setNamedTag($tags);
 		
 		$this->updateMapData();
 	}
 	
-	public function getImageHash() {
-		return json_decode((string) ($this->getNamedTag()->mie_data ?? null), true)['image_hash'] ?? null;
-	}
-	
-	public function getImageChunkX() {
-		return json_decode((string) ($this->getNamedTag()->mie_data ?? null), true)['x_block'] ?? null;
-	}
-	
-	public function getImageChunkY() {
-		return json_decode((string) ($this->getNamedTag()->mie_data ?? null), true)['y_block'] ?? null;
-	}
-	
 	public function getMaxStackSize() : int {
 		return 1;
+
 	}
-	
+
 }
